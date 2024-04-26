@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 /*
 
 x = 5
@@ -35,14 +34,11 @@ statement			:= assignment
 						| if_expr
 						| func_def
 						| for-loop
-
-func_statement 	:= statement | return_statement //TODO
-return_statement 	:= RETURN (logic_expr | expr) //TODO
 				
-assignment			:= KEYWORD EQ logic_expr 
+assignment			:= KEYWORD EQ logic_expr
 for-loop				:= FOR KEYWORD IN SEQUENCE RARRAW BRACE (NEWLINE statement)* LBRACE
 func_def				:= fn KEYWORD COLON (KEYWORD? (COMMA KEYWORD)*) RARROW func_body
-func_body			:= LBRACE (NEWLINE func_statement)* RBRACE //TODO
+func_body			:= LBRACE (NEWLINE statement)* RBRACE
 func_call			:= KEYWORD LPAREN ((expr (COMMA expr)*)  | expr) RPAREN 
 
 if_expr				:= IF COLON logic_expr RARROW if_expr (ELSE assignment)? 
@@ -128,7 +124,7 @@ Token* parser_skip(Parser *parser, int jmp_count, Error *error){
 int is_parser_eof(Parser *parser){ return parser->curr_token == NULL; }
 
 
-AST *parse_block(Parser *parser, Enviroment *env, Error *error) {
+AST *parse_block(Parser *parser, Enviroment *env, bool is_func_statement, Error *error) {
 	if (is_parser_eof(parser)) return NULL;
 
 	// Skip leading newlines
@@ -137,7 +133,7 @@ AST *parse_block(Parser *parser, Enviroment *env, Error *error) {
 
 	List *statements = createList();
 	// Parse the first statement and check for errors
-	AST *statement = parse_statement(parser, env, error);
+	AST *statement = parse_statement(parser, env, is_func_statement, error);
 	if (error->type != ERR_NONE) return NULL;
 	list_push(statements, statement);
 
@@ -153,7 +149,7 @@ AST *parse_block(Parser *parser, Enviroment *env, Error *error) {
 		if (error->type != ERR_NONE) return NULL;
 		if (parser->curr_tok_type == TOKEN_RBRACE) break; // End of block
 
-		statement = parse_statement(parser, env, error);
+		statement = parse_statement(parser, env, is_func_statement, error);
 		if (error->type != ERR_NONE) return NULL;
 		list_push(statements, statement);
 	}
@@ -169,7 +165,7 @@ AST *parse_block(Parser *parser, Enviroment *env, Error *error) {
 
 
 // parse a single line statement
-AST*	parse_statement(Parser *parser, Enviroment* env, Error *error){
+AST*	parse_statement(Parser *parser, Enviroment* env, bool is_func_statement, Error *error){
 	if(is_parser_eof(parser)) return NULL;
 	
 	Token *token = parser_peek(parser, error);
@@ -180,9 +176,17 @@ AST*	parse_statement(Parser *parser, Enviroment* env, Error *error){
 			return parse_assignment_expr(parser, env, error);
 		//handle IF statement
 		else if(strcmp(parser_peek(parser, error)->value, "if") == 0)
-			return parse_if_expr(parser, env, error);
+			return parse_if_expr(parser, env, is_func_statement, error);
 		else if(strcmp(parser_peek(parser, error)->value, "fn") == 0)
 			return parse_function(parser, env, error);
+		else if(strcmp(parser_peek(parser, error)->value, "return") == 0){
+			if(!is_func_statement){
+				parse_error(ERR_SYNTAX, &error, "Cannot return outside of a function");
+				return NULL;
+			}
+			parser_next(parser, error); // consume return 
+			return make_return_node(parse_logic_expr(parser, env, error));
+		}
 	}
 	return parse_logic_expr(parser, env, error);
 }
@@ -193,7 +197,7 @@ AST* parse_assignment_expr(Parser *parser, Enviroment *env, Error *error){
 	parser_next(parser, error); //consume variable name
 	parser_next(parser, error); //consume =
 
-	AST *expr = parse_statement(parser, env, error); // parse the variable value
+	AST *expr = parse_statement(parser, env, false, error); // parse the variable value
 	if(error->type != ERR_NONE) return NULL;
 	if(expr == NULL){
 		parse_error(ERR_SYNTAX, &error, "Expected expression after assignment.");
@@ -203,7 +207,7 @@ AST* parse_assignment_expr(Parser *parser, Enviroment *env, Error *error){
 	return make_assign_node(vname, expr);
 }
 
-AST* parse_if_expr(Parser *parser, Enviroment *env, Error *error){
+AST* parse_if_expr(Parser *parser, Enviroment *env, bool is_func_statement, Error *error){
 	if(is_parser_eof(parser)) return NULL;
 
 	parser_next(parser, error); // consume if 
@@ -220,7 +224,7 @@ AST* parse_if_expr(Parser *parser, Enviroment *env, Error *error){
 	parser_next(parser, error); // consume =>
 	if(!is_parser_eof(parser) && parser->curr_tok_type == TOKEN_LBRACE){
 		parser_next(parser, error); // consume {
-		if_body = parse_block(parser, env, error);
+		if_body = parse_block(parser, env, is_func_statement, error);
 		if(error->type != ERR_NONE) return NULL;
 		if(is_parser_eof(parser) || parser->curr_tok_type != TOKEN_RBRACE){
 			parse_error(ERR_SYNTAX, &error, "Exepcted closing brace } after if block");
@@ -233,7 +237,7 @@ AST* parse_if_expr(Parser *parser, Enviroment *env, Error *error){
 				parse_error(ERR_SYNTAX, &error, "Expected if after else statement.");
 				return NULL;
 			}
-			if_else = parse_if_expr(parser, env, error);
+			if_else = parse_if_expr(parser, env, is_func_statement, error);
 			if(error->type != ERR_NONE) return NULL;
 			return make_if_node(condition_expr, if_body, if_else);
 		}
@@ -244,7 +248,7 @@ AST* parse_if_expr(Parser *parser, Enviroment *env, Error *error){
 				return NULL;
 			}
 			parser_next(parser, error); // consume {
-			if_else = parse_block(parser, env, error);
+			if_else = parse_block(parser, env, is_func_statement, error);
 			if(error->type != ERR_NONE) return NULL;
 			if(!is_parser_eof(parser) && parser->curr_tok_type != TOKEN_RBRACE){
 				parse_error(ERR_SYNTAX, &error, "Expected closing brace } after else block");
@@ -255,14 +259,14 @@ AST* parse_if_expr(Parser *parser, Enviroment *env, Error *error){
 		}
 		return make_if_node(condition_expr, if_body, NULL);
 	}
-	AST *expr = parse_statement(parser, env, error); // parse the expression to be evaluated
+	AST *expr = parse_statement(parser, env, is_func_statement, error); // parse the expression to be evaluated
 
 	//checking if there's an else case 
 	if(!is_parser_eof(parser) && parser_peek(parser, error)->type == TOKEN_RARROW){
 		if(error->type != ERR_NONE) return NULL;
 		parser_next(parser, error); //consume else =>
 
-		AST *else_expr = parse_statement(parser, env, error);
+		AST *else_expr = parse_statement(parser, env, is_func_statement, error);
 		if(error->type != ERR_NONE) return NULL;
 
 		return make_if_node(condition_expr, expr, else_expr);
@@ -301,7 +305,7 @@ AST* parse_function(Parser *parser, Enviroment *env, Error *error){
 		if(!is_parser_eof(parser) && parser->curr_tok_type == TOKEN_LBRACE){
 			parser_next(parser, error); // consume {
 			parser_next(parser, error); // consume newline
-			AST *fn_body = parse_block(parser, env, error);
+			AST *fn_body = parse_block(parser, env, true, error);
 			if(error->type != ERR_NONE) return NULL;
 			if(parser->curr_tok_type != TOKEN_RBRACE){
 				parse_error(ERR_SYNTAX, &error, "Expected } after function declation");
@@ -313,7 +317,7 @@ AST* parse_function(Parser *parser, Enviroment *env, Error *error){
 		}
 
 
-		AST *fn_body = parse_statement(parser, env, error);
+		AST *fn_body = parse_statement(parser, env, true, error);
 		if(error->type != ERR_NONE) return NULL;
 		env_define_func(env, fname, fn_body);
 		return make_func_node(fname, fn_body, parameters);

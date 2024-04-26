@@ -65,6 +65,12 @@ AST* make_assign_node(char *vname, AST *expr){
 	return assign;
 }
 
+AST* make_return_node(AST *expr){
+	AST *ret = ast_init(NODE_RETURN, NULL, NULL);
+	ret->value.return_expr = expr;
+	return ret;
+}
+
 AST *make_call_node(char *caller, List *arguments){
 	AST *call = ast_init(NODE_CALL, NULL, NULL);
 	call->value.call_expr.caller  = caller;
@@ -83,6 +89,7 @@ AST* make_operator_node(NodeType type, List *arguments){
 RuntimeVal eval_expr(AST *root, Enviroment* env){
 
 	RuntimeVal result; result.type = RESULT_NONE;
+	result.retval = false;
 	if(root == NULL) return result;
 	if(is_binary_op(root) && root->right == NULL)
 		return make_error(RESULT_ERROR_SYNTAX,  "Missing operand in binary operations");
@@ -99,9 +106,10 @@ RuntimeVal eval_expr(AST *root, Enviroment* env){
 	else if(root->type == NODE_FUNCTION_DIV) 	return builtin_function_div(root, env);
 	else if(root->type == NODE_BLOCK){
 		Node *statement = root->value.statements->head;
-		RuntimeVal stmnt; stmnt.type = RESULT_NONE;
+		RuntimeVal stmnt; stmnt.type = RESULT_NONE; stmnt.retval = false;
 		while(statement != NULL){
 			stmnt = eval_expr(statement->value, env);
+			if(stmnt.retval) return stmnt;
 			statement = statement->next;
 		}
 		return stmnt;
@@ -149,6 +157,10 @@ RuntimeVal eval_expr(AST *root, Enviroment* env){
 		char *fname = root->value.fn.fname;
 		env_define_func(env, fname, root);
 		result.type = RESULT_FUNCTION;
+	}
+	else if(root->type == NODE_RETURN){
+		result = eval_expr(root->value.return_expr, env);
+		result.retval = true;
 	}
 
 	return result;
@@ -329,6 +341,8 @@ RuntimeVal 	eval_call_expr(AST *root, Enviroment *env){
 	}
 
 	RuntimeVal returnedVal = eval_expr(function->value.fn.fbody, scope);
+	if(returnedVal.retval) return returnedVal;
+	returnedVal.type = RESULT_NONE;
 	return returnedVal;
 }
 
@@ -458,6 +472,7 @@ void print_node_type(AST *root) {
 		case NODE_INT: 				printf("int(%d)", root->value.i_value); 					break;
 		case NODE_VARIABLE: 			printf("var(`%s`)", root->value.var.vname); 				break;
 		case NODE_ASSIGN: 			printf("assign `%s`:", root->value.var.vname);			break;
+		case NODE_RETURN: 			printf("return:");												break;
 		case NODE_BLOCK: 				printf("block:"); 												break;
 		case NODE_UNARY_PLUS: 		printf("plus:"); 													break;
 		case NODE_UNARY_MINUS: 		printf("minus:"); 												break;
@@ -507,7 +522,6 @@ void print_parameters(List* parameters) {
 
 // Function to print function nodes
 void print_function_node(AST* root, Enviroment* env, int level) {
-	print_indent(level - 1);  // Ensure proper indentation
 	printf("function %s(", root->value.fn.fname);
 	
 	// Print function parameters
@@ -530,7 +544,8 @@ void print_ast(AST* root, Enviroment* env, int level) {
 
 	print_indent(level);  // Ensure proper indentation
 	print_node_type(root);  // Print the node type
-	if(root->type == NODE_FUNCTION) print_function_node(root, env, level);
+	if(root->type == NODE_FUNCTION) 	print_function_node(root, env, level);
+	if(root->type == NODE_RETURN) 	print_ast(root->value.return_expr, env, level + 1);
 	
 	if (root->type == NODE_BLOCK) {
 		print_indent(level);  // Ensure proper indentation

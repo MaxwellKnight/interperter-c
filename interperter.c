@@ -26,7 +26,7 @@ int main(int argc, char** argv){
 	Error error = error_init();
 
 	// list_print(tokenize(source), print_token);
-	AST *program = parse_block(parser, global_env, &error);
+	AST *program = parse_block(parser, global_env, false, &error);
 	if(error.err != NULL){
 		printf("%s:[%u] %s\n", error.err, error.type, error.message);
 		return 0;
@@ -50,7 +50,7 @@ void run(Enviroment *global_env){
 		fgets(input, BUFFER, stdin);
 		Parser *parser = parser_init(tokenize(input));
 		Error error = error_init();
-		AST *program = parse_statement(parser, global_env, &error);
+		AST *program = parse_statement(parser, global_env, false, &error);
 		if(error.err != NULL){
 			printf("%s [%u] %s\n", error.err, error.type, error.message);
 			continue;

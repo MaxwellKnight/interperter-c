@@ -36,6 +36,7 @@ typedef enum NodeType {
 	NODE_FUNCTION,
 	NODE_FUNC_VARIABLE,
 	NODE_CALL,
+	NODE_RETURN,
 	NODE_BLOCK,
 } NodeType;
 
@@ -49,6 +50,7 @@ typedef union {
 	List *arguments; // operator nodes
 
 	struct AST *condition; // if nodes
+	struct AST *return_expr; // if nodes
 
 	struct AssignNodeVal {
 		char *vname;
@@ -97,6 +99,7 @@ AST*			make_if_node(AST *condition, AST *if_case, AST *else_case);
 AST*			make_func_node(char *fname, AST *fbody, List *parameters);
 AST*			make_var_node(char *vname);
 AST*			make_call_node(char *caller, List *arguments);
+AST*			make_return_node(AST *expr);
 AST*			make_operator_node(NodeType type, List *arguments);
 
 //operators add, sub, mul, div

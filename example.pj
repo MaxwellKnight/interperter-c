@@ -1,9 +1,14 @@
-fn square: x => x ** 2
 
 fn fib_sqaure_sum: x, y => {
-	fn fib: n => if: n <= 2 => 1 => fib(n - 1) + fib(n - 2)
+	fn square: x => return x ** 2
+	
+	fn fib: n => {
+		if: n <= 2 => return 1
 
-	square(fib(x)) + square(fib(y))
+		return fib(n - 1) + fib(n - 2)
+	}
+
+	return square(fib(x)) + square(fib(y))
 }
 
-fib_sqaure_sum(2,3)
+fib_sqaure_sum(5,3)
