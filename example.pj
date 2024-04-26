@@ -1,0 +1,31 @@
+
+fn max: x, y => if: x > y => x => y
+fn min: x, y => if: x < y => x => y
+fn square: x => x ** 2
+
+fn fib_squares: x, y => {
+	fn fib: n => if: n <= 2 => 1 => fib(n - 1) + fib(n - 2)
+
+	square(fib(x)) + square(fib(y))
+}
+
+
+fn something_funny: x, y => {
+	a = x + y
+	b = x * y
+	a ** 2 + b ** 2
+}
+
+fn factorial: n => {
+	if: n <= 0 => 1
+
+	if: n > 0 => n * factorial(n - 1)
+}
+
+fn convertush: n => {
+	if: n == 0 => 	0
+	if: n > 0 => 	n % 2 + convertush(n / 2) * 10 
+}
+
+a = something_funny(1,2)
+b = convertush(5)
