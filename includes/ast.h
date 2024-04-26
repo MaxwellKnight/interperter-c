@@ -46,11 +46,19 @@ typedef union {
 	bool b_value; // BOOLEAN node // TODO: add boolean nodes and update the code
 
 	List *statements; //block nodes 
-	List *arguments; // function call nodes 
+	List *arguments; // operator nodes
 
-	char *vname; // variable node 
 	struct AST *condition; // if nodes
-	struct AST *expr; // return expressions represented by a root node to the expression
+
+	struct AssignNodeVal {
+		char *vname;
+		struct AST *expr;
+	} var;
+
+	struct CallExprNode {
+		char *caller;
+		List *arguments;
+	} call_expr;
 
 	struct FunctionNodeVal {
 		char *fname;
@@ -61,17 +69,15 @@ typedef union {
 } NodeValue;
 
 typedef struct AST{
-	NodeValue _value;
+	NodeValue value;
 	NodeType type;
 	struct AST *left;
 	struct AST *right;
 
-	void *value;
-	char *fname; // function nodes name
 } AST;
 
 /*===================== AST =====================*/
-AST*			ast_init(int type, void* value, AST *left, AST *right);
+AST*			ast_init(NodeType type, AST *left, AST *right);
 RuntimeVal	eval_expr(AST *root, Enviroment* env);
 RuntimeVal	eval_unary_expr(AST *root, Enviroment* env);
 RuntimeVal	eval_binary_expr(AST *root, Enviroment* env);
@@ -85,9 +91,13 @@ RuntimeVal	eval_number(AST *root, Enviroment* env);
 AST* 			make_int_node(int value);
 AST* 			make_float_node(int value);
 AST* 			make_block_node(List* statements);
+AST*			make_assign_node(char *vname, AST *expr);
 AST*			make_binop_node(NodeType type, AST *left, AST *right);
 AST*			make_if_node(AST *condition, AST *if_case, AST *else_case);
-AST*			make_func_node(char *fname, AST *fbody);
+AST*			make_func_node(char *fname, AST *fbody, List *parameters);
+AST*			make_var_node(char *vname);
+AST*			make_call_node(char *caller, List *arguments);
+AST*			make_operator_node(NodeType type, List *arguments);
 
 //operators add, sub, mul, div
 RuntimeVal	builtin_function_add(AST *root, Enviroment *env);

@@ -7,35 +7,81 @@
 /*===================== Evaluation =====================*/
 
 // Initialize an abstract syntax tree node with given type, value, left and right nodes
-AST* ast_init(int type, void* value, AST *left, AST *right){
+AST* ast_init(NodeType type, AST *left, AST *right){
 	AST *ast = (AST*)malloc(sizeof(AST)); 
 	ast->type = type; 
 	ast->left = left; 
 	ast->right = right;
-	ast->value = value;
 	return ast; 
 }
 
 //create a node with type of int
 AST* make_int_node(int val){
-	AST *node = ast_init(NODE_INT, NULL, NULL, NULL);
-	node->_value.i_value = val;
+	AST *node = ast_init(NODE_INT, NULL, NULL);
+	node->value.i_value = val;
 	return node;
 }
 //create a node with type of float
 AST* make_float_node(int val){
-	AST *node = ast_init(NODE_FLOAT, NULL, NULL, NULL);
-	node->_value.f_value = val;
+	AST *node = ast_init(NODE_FLOAT, NULL, NULL);
+	node->value.f_value = val;
 	return node;
 }
 AST* make_block_node(List *statements){
-	AST *node = ast_init(NODE_BLOCK, NULL, NULL, NULL);
-	node->_value.statements = statements;
+	AST *node = ast_init(NODE_BLOCK, NULL, NULL);
+	node->value.statements = statements;
 	return node;
+}
+
+AST* make_binop_node(NodeType type, AST *left, AST *right){
+	AST *binop = ast_init(type, left, right);
+	return binop;
+}
+
+AST* make_if_node(AST *condition, AST *if_case, AST *else_case){
+	AST *ifnode = ast_init(NODE_IF_ELSE, if_case, else_case);
+	ifnode->value.condition = condition;
+	return ifnode;
+}
+
+AST* make_func_node(char *fname, AST *fbody, List *parameters){
+	AST *func_node = ast_init(NODE_FUNCTION, NULL, NULL);
+	func_node->value.fn.fbody = fbody;
+	func_node->value.fn.fname = fname;
+	func_node->value.fn.parameters = parameters;
+	return func_node;
+}
+
+AST* make_var_node(char *vname){
+	AST *varnode = ast_init(NODE_VARIABLE, NULL, NULL);
+	varnode->value.var.vname = vname;
+	return varnode;
+}
+
+AST* make_assign_node(char *vname, AST *expr){
+	AST *assign = ast_init(NODE_ASSIGN, NULL, NULL);
+	assign->value.var.vname = vname;
+	assign->value.var.expr = expr;
+	return assign;
+}
+
+AST *make_call_node(char *caller, List *arguments){
+	AST *call = ast_init(NODE_CALL, NULL, NULL);
+	call->value.call_expr.caller  = caller;
+	call->value.call_expr.arguments = arguments;
+
+	return call;
+}
+
+AST* make_operator_node(NodeType type, List *arguments){
+	AST *operator = ast_init(type, NULL, NULL);
+	operator->value.arguments = arguments;
+	return operator;
 }
 
 // evaluate the expresion represented by the abstract syntax tree and return the result
 RuntimeVal eval_expr(AST *root, Enviroment* env){
+
 	RuntimeVal result; result.type = RESULT_NONE;
 	if(root == NULL) return result;
 	if(is_binary_op(root) && root->right == NULL)
@@ -52,7 +98,7 @@ RuntimeVal eval_expr(AST *root, Enviroment* env){
 	else if(root->type == NODE_FUNCTION_MUL) 	return builtin_function_mul(root, env);
 	else if(root->type == NODE_FUNCTION_DIV) 	return builtin_function_div(root, env);
 	else if(root->type == NODE_BLOCK){
-		Node *statement = root->_value.statements->head;
+		Node *statement = root->value.statements->head;
 		RuntimeVal stmnt; stmnt.type = RESULT_NONE;
 		while(statement != NULL){
 			stmnt = eval_expr(statement->value, env);
@@ -76,7 +122,7 @@ RuntimeVal eval_expr(AST *root, Enviroment* env){
 	else if(root->type == NODE_IF_ELSE){
 		RuntimeVal result;
 		result.type = RESULT_INT;
-		RuntimeVal condition = eval_boolean_expr(root->value, env);
+		RuntimeVal condition = eval_boolean_expr(root->value.condition, env);
 		if(is_error(condition)) return condition;
 		if(condition.type != RESULT_BOOL)
 			return make_error(RESULT_ERROR_VALUE, "Expected a boolean condition after if statement");
@@ -88,19 +134,19 @@ RuntimeVal eval_expr(AST *root, Enviroment* env){
 	} 			
 	else if(root->type == NODE_ASSIGN){
 		RuntimeVal result; result.type = RESULT_NONE;
-		result = eval_expr(root->right, env);
+		result = eval_expr(root->value.var.expr, env);
 		AST *value = NULL;
 		if(result.type  == RESULT_INT) 				value = 	make_int_node(result.value.i_value);
 		else if(result.type == RESULT_FLOAT) 		value = 	make_int_node(result.value.f_value);
 		else make_error(RESULT_ERROR_UNDEFINED, "Undefined assignment of function to variable");
 
-		env_assign_var(env, root->left->_value.vname, value);
+		env_assign_var(env, root->value.var.vname, value);
 		return result;
 	}
 	else if(root->type == NODE_FUNCTION){
-		if(!root->left || !root->right) 
+		if(!root->value.fn.fbody) 
 			return make_error(RESULT_ERROR_VALUE, "Cannot evaluate function");
-		char *fname = root->left->value;
+		char *fname = root->value.fn.fname;
 		env_define_func(env, fname, root);
 		result.type = RESULT_FUNCTION;
 	}
@@ -115,12 +161,12 @@ RuntimeVal	eval_number(AST *root, Enviroment* env){
 		return make_error(RESULT_ERROR_VALUE, "call to eval_number must be FLOAT | INT");
 
 	if(root->type == NODE_FLOAT){
-		result.value.f_value = root->_value.f_value;
+		result.value.f_value = root->value.f_value;
 		result.type = RESULT_FLOAT;
 		return result;
 	}
 
-	result.value.i_value = root->_value.i_value;
+	result.value.i_value = root->value.i_value;
 	result.type = RESULT_INT;
 	return result;
 }
@@ -238,28 +284,28 @@ RuntimeVal	eval_boolean_expr(AST *root, Enviroment* env){
 }
 
 RuntimeVal eval_variable(AST *root, Enviroment* env){
-	AST *variable = env_get_var(env, root->_value.vname);
+	AST *variable = env_get_var(env, root->value.var.vname);
 	if(variable) 
 		return eval_expr(variable, env);
 
-	variable = env_get_function(env, root->_value.vname);
+	variable = env_get_function(env, root->value.var.vname);
 	if(variable) 
 		return eval_call_expr(root, env);
 
-	return make_error(RESULT_ERROR_UNDEFINED, (char*)root->_value.vname);
+	return make_error(RESULT_ERROR_UNDEFINED, (char*)root->value.var.vname);
 }
 
 RuntimeVal 	eval_call_expr(AST *root, Enviroment *env){
 	RuntimeVal result;
 	result.type = RESULT_ERROR_UNDEFINED;
 	if(root == NULL) return result;
-	AST *function = env_get_function(env, root->fname);
-	List *arguments = root->_value.arguments;
-	List *parameters = function->value;
+	AST *function = env_get_function(env, root->value.call_expr.caller);
+	List *arguments = root->value.call_expr.arguments;
+	List *parameters = function->value.fn.parameters;
 	Node *argsCurr = arguments->head;
 	Node *paramCurr = parameters->head;
 	Enviroment *scope = env_init(DEFAULT_SIZE);
-	scope->parent = env_get(env, root->fname);
+	scope->parent = env_get(env, root->value.call_expr.caller);
 
 	if(arguments->size < parameters->size)
 		return make_error(RESULT_ERROR_VALUE, "Missing arguments");
@@ -282,12 +328,12 @@ RuntimeVal 	eval_call_expr(AST *root, Enviroment *env){
 		paramCurr = paramCurr->next;
 	}
 
-	RuntimeVal returnedVal = eval_expr(function->right, scope);
+	RuntimeVal returnedVal = eval_expr(function->value.fn.fbody, scope);
 	return returnedVal;
 }
 
 RuntimeVal builtin_function_sub(AST *root, Enviroment* env){
-	List *operands = root->_value.arguments;
+	List *operands = root->value.arguments;
 	Node *curr = operands->head;
 	RuntimeVal result = coerce_to_float(eval_expr(curr->value, env)); // Initialize sum with the first operand
 	if(is_error(result)) return result;
@@ -305,7 +351,7 @@ RuntimeVal builtin_function_sub(AST *root, Enviroment* env){
 
 RuntimeVal builtin_function_add(AST *root, Enviroment* env){
 	RuntimeVal result;
-	List *operands = root->_value.arguments;
+	List *operands = root->value.arguments;
 	Node *curr = operands->head;
 	while(curr != NULL){ 
 		RuntimeVal op = coerce_to_float(eval_expr(curr->value, env));
@@ -320,7 +366,7 @@ RuntimeVal builtin_function_add(AST *root, Enviroment* env){
 RuntimeVal builtin_function_mul(AST *root, Enviroment* env){
 	RuntimeVal result;
 	result.value.f_value = 1;
-	List *operands = root->_value.arguments;
+	List *operands = root->value.arguments;
 	Node *curr = operands->head;
 	while(curr != NULL){ 
 		RuntimeVal op = coerce_to_float(eval_expr(curr->value, env));
@@ -333,7 +379,7 @@ RuntimeVal builtin_function_mul(AST *root, Enviroment* env){
 }
 
 RuntimeVal builtin_function_div(AST *root, Enviroment* env){
-	List *operands = root->_value.arguments;
+	List *operands = root->value.arguments;
 	RuntimeVal result;
 	if(operands->size != 2)
 		return make_error(RESULT_ERROR_SYNTAX, "SyntaxError: `div` accepts exactly two arguments.");
@@ -385,99 +431,152 @@ bool is_number_node(AST *root){
 	return root->type == NODE_FLOAT || root->type == NODE_INT;
 }
 
-// Print the abstract syntax tree
-void print_ast(AST* root, Enviroment* env, int level) {
-	if (root == NULL) return;
+// Function to print appropriate indentation
+void print_indent(int level) {
+	for (int i = 0; i < level; i++) {
+		printf("  ");  // Double space indentation
+	}
+}
 
-	for (int i = 0; i < level; i++) printf("  ");
-
+// Function to print node type in a readable format
+void print_node_type(AST *root) {
+	if(!root) return;
 	switch (root->type) {
-		case NODE_ADD: 			printf("add:"); 												break;
-		case NODE_GT: 				printf("GT(`>`):"); 											break;
-		case NODE_GTE: 			printf("GTE(`>=`):"); 										break;
-		case NODE_LT: 				printf("LT(`<`):"); 											break;
-		case NODE_LTE: 			printf("LTE(`<=`):"); 										break;
-		case NODE_EQUALS: 		printf("EQUALS(`==`):"); 									break;
-		case NODE_NOT_EQUALS: 	printf("NOT-EQUALS(`!=`):"); 								break;
-		case NODE_SUB: 			printf("sub:");												break;
-		case NODE_MUL: 			printf("mul:"); 												break;
-		case NODE_DIV: 			printf("div:");												break;
-		case NODE_POW: 			printf("pow:");												break;
-		case NODE_MODULUS: 		printf("modulus:");											break;
-		case NODE_FLOAT:			printf("float(%.2lf)\n", root->_value.f_value); 	return; 
-		case NODE_INT:				printf("int(%d)\n", root->_value.i_value); 			return; 
-		case NODE_VARIABLE:		printf("var(`%s`)", root->_value.vname); 				break; 
-		case NODE_ASSIGN: 		printf("assign:");											break;
-		case NODE_BLOCK: 			printf("block:");												break;
-		case NODE_UNARY_PLUS: 	printf("plus:");												break;
-		case NODE_UNARY_MINUS: 	printf("minus:");												break;
-		case NODE_IF: 				printf("if-stmnt:");											break;
-		case NODE_IF_ELSE: 		printf("if-else-stmnt:");									break;
-		case NODE_AND: 			printf("and-stmnt:");										break;
-		case NODE_OR: 				printf("or-stmnt:");											break;
-		case NODE_UNARY_NOT: 	printf("not-stmnt:");										break;
-		case NODE_FUNCTION	: 	printf("function:");											break;
-		case NODE_FUNC_VARIABLE:printf("fname(`%s`)", root->fname);						break;
-		case NODE_CALL:			printf("<function_call %s>", root->fname);			break;
-		case NODE_FUNCTION_ADD: print_builtin_math_function(root, env, level); 		return;
-		case NODE_FUNCTION_SUB: print_builtin_math_function(root, env, level); 		return;
-		case NODE_FUNCTION_MUL:	print_builtin_math_function(root, env, level); 		return;
-		case NODE_FUNCTION_DIV: print_builtin_math_function(root, env, level); 		return;
+		case NODE_ADD: 				printf("add:"); 													break;
+		case NODE_SUB: 				printf("sub:"); 													break;
+		case NODE_MUL: 				printf("mul:"); 													break;
+		case NODE_DIV: 				printf("div:"); 													break;
+		case NODE_GT: 					printf("GT(`>`):"); 												break;
+		case NODE_GTE: 				printf("GTE(`>=`):"); 											break;
+		case NODE_LT: 					printf("LT(`<`):"); 												break;
+		case NODE_LTE: 				printf("LTE(`<=`):");											break;
+		case NODE_EQUALS: 			printf("EQUALS(`==`):"); 										break;
+		case NODE_NOT_EQUALS: 		printf("NOT-EQUALS(`!=`):"); 									break;
+		case NODE_POW: 				printf("pow:"); 													break;
+		case NODE_MODULUS: 			printf("modulus:"); 												break;
+		case NODE_FLOAT: 				printf("float(%.2f)", root->value.f_value); 				break;
+		case NODE_INT: 				printf("int(%d)", root->value.i_value); 					break;
+		case NODE_VARIABLE: 			printf("var(`%s`)", root->value.var.vname); 				break;
+		case NODE_ASSIGN: 			printf("assign `%s`:", root->value.var.vname);			break;
+		case NODE_BLOCK: 				printf("block:"); 												break;
+		case NODE_UNARY_PLUS: 		printf("plus:"); 													break;
+		case NODE_UNARY_MINUS: 		printf("minus:"); 												break;
+		case NODE_IF: 					printf("if-stmnt:"); 											break;
+		case NODE_IF_ELSE: 			printf("if-else-stmnt:"); 										break;
+		case NODE_AND: 				printf("and-stmnt:"); 											break;
+		case NODE_OR: 					printf("or-stmnt:"); 											break;
+		case NODE_UNARY_NOT: 		printf("not-stmnt:"); 											break;
+		case NODE_FUNCTION: 			 																		return;
+		case NODE_FUNC_VARIABLE: 	printf("fname(`%s`)", root->value.fn.fname); 			break;
+		case NODE_CALL: 				printf("<function_call %s>", root->value.fn.fname); 	break;
+		default: 						 																		break;
 	}
 	printf("\n");
+}
 
-	if(root->type == NODE_VARIABLE){
-		AST *value = env_get_var(env, root->_value.vname);
-		print_ast(value, env, level + 1);
+// Function to handle built-in math functions
+void print_builtin_math_function(AST* root, Enviroment* env, int level) {
+	List* operands = root->value.arguments;
+	print_indent(level);  // Proper indentation
+	printf("%s(\n", root->type == NODE_FUNCTION_ADD ? "f_add"
+		: root->type == NODE_FUNCTION_SUB ? "f_sub"
+		: root->type == NODE_FUNCTION_MUL ? "f_mul"
+		: "f_div");  // Switch for function type
+	
+	Node* curr = operands->head;
+	while (curr) {
+		print_ast(curr->value, env, level + 1);  // Recursive call
+		curr = curr->next;
+	}
+	
+	print_indent(level);  // Indentation for closing parenthesis
+	printf(")\n");
+}
+
+// Function to print a list of parameters
+void print_parameters(List* parameters) {
+	Node* curr = parameters->head;
+	while (curr) {
+		printf("%s", (char*)curr->value);
+		if (curr->next) {
+			printf(", ");
+		}
+		curr = curr->next;
+	}
+}
+
+// Function to print function nodes
+void print_function_node(AST* root, Enviroment* env, int level) {
+	print_indent(level - 1);  // Ensure proper indentation
+	printf("function %s(", root->value.fn.fname);
+	
+	// Print function parameters
+	print_parameters(root->value.fn.parameters);
+	
+	printf(") {\n");
+	
+	// Print the function body, which is a block node
+	if (root->value.fn.fbody) {
+		print_ast(root->value.fn.fbody, env, level + 1);  // Recurse to print the function body
+	}
+
+	print_indent(level);  // Indentation for closing block
+	printf("}\n");
+}
+
+// Recursive function to print AST
+void print_ast(AST* root, Enviroment* env, int level) {
+	if (!root) return;  // Base case to exit recursion
+
+	print_indent(level);  // Ensure proper indentation
+	print_node_type(root);  // Print the node type
+	if(root->type == NODE_FUNCTION) print_function_node(root, env, level);
+	
+	if (root->type == NODE_BLOCK) {
+		print_indent(level);  // Ensure proper indentation
+		printf("{\n");
+		Node* curr = root->value.statements->head;
+		while (curr) {
+			print_ast(curr->value, env, level + 1);  // Recursive call for each statement
+			curr = curr->next;
+		}
+		print_indent(level);
+		printf("}\n");
 		return;
 	}
 
-
-	print_ast(root->left, env, level + 1); // Print left subtree
-	if(root->type == NODE_FUNCTION){
-		for (int i = 0; i < level + 1; i++) printf("  ");
-		printf("parameters: ");
-		list_print(root->value, print_string);
+	if (root->type == NODE_VARIABLE) {
+		AST* value = env_get_var(env, root->value.var.vname);
+		if (value) {
+			print_ast(value, env, level + 1);  // Recurse for variable's value
+			printf("\n");
+		}
+		return;
 	}
-	if(root->type == NODE_CALL){
-		for (int i = 0; i < level + 1; i++) printf("  ");
-		printf("parameters: \n");
-		Node *curr = root->_value.statements->head;
-		while(curr != NULL){
-			print_ast(curr->value, env, level + 2);
+
+	if (root->type == NODE_CALL) {
+		print_indent(level);
+		printf("arguments:\n");
+		Node* curr = root->value.call_expr.arguments->head;
+		while (curr) {
+			print_ast(curr->value, env, level + 2);  // Recurse for each parameter
 			curr = curr->next;
 		}
+		printf("\n");
+		return;
 	}
-	if(root->type == NODE_BLOCK){
-		for (int i = 0; i < level + 1; i++) printf("  ");
-		printf("statements:{\n");
-		Node *curr = root->_value.statements->head;
-		while(curr != NULL){
-			print_ast(curr->value, env, level + 2);
-			curr = curr->next;
-		}
-		for (int i = 0; i < level + 1; i++) printf("  ");
-		printf("}\n");
-	}
-	print_ast(root->right, env, level + 1); // Print right subtree
 
-}
-
-void print_builtin_math_function(AST *root, Enviroment* env, int level){
-	List *operands = root->_value.arguments;
-	Node *curr = operands->head;
-
-	switch (root->type){
-		case NODE_FUNCTION_ADD: printf("f_add(\n"); break;
-		case NODE_FUNCTION_SUB:	printf("f_sub(\n"); break;
-		case NODE_FUNCTION_MUL:	printf("f_mul(\n"); break;
-		case NODE_FUNCTION_DIV:	printf("f_div(\n"); break;
-		default: break;
+	// For unary operators, recursive printing with appropriate indentation
+	if (root->type == NODE_FUNCTION_ADD || root->type == NODE_FUNCTION_SUB ||
+		root->type == NODE_FUNCTION_MUL || root->type == NODE_FUNCTION_DIV) {
+		print_builtin_math_function(root, env, level);  // Delegate to specific function
+		printf("\n");
+		return;
 	}
-	while(curr != NULL){
-		print_ast(curr->value,env, level + 1);
-		curr = curr->next;
-	}
-	for(int i = 0; i < level; i++) printf("  ");
-	printf(")\n");
+
+	if(root->type == NODE_ASSIGN) print_ast(root->value.var.expr, env, level + 1);
+
+	// Recurse for left and right subtrees
+	if (root->left) print_ast(root->left, env, level + 1);
+	if (root->right) print_ast(root->right, env, level + 1);
 }

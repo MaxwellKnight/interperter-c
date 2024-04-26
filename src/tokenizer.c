@@ -17,6 +17,7 @@ Token* token_init(char *value, int type){
 
 // Convert token to string representation
 char* token_to_str(Token *token){
+	if(!token) return "";
 	char* token_str = (char*)calloc(BUFF_SIZE, sizeof(char)); 
 	sprintf(token_str, "token(%d, `%s`)", token->type, token->value);
 	return token_str;

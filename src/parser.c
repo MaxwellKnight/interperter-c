@@ -199,11 +199,8 @@ AST* parse_assignment_expr(Parser *parser, Enviroment *env, Error *error){
 		parse_error(ERR_SYNTAX, &error, "Expected expression after assignment.");
 		return NULL;
 	}
-	AST *variable = ast_init(NODE_VARIABLE, NULL, NULL, NULL);
-	variable->_value.vname = vname; 
-	if(error->type != ERR_NONE) return NULL;
 	//return an assign node with left child of variable node and right child of expr node
-	return ast_init(NODE_ASSIGN, NULL, variable, expr);
+	return make_assign_node(vname, expr);
 }
 
 AST* parse_if_expr(Parser *parser, Enviroment *env, Error *error){
@@ -238,7 +235,7 @@ AST* parse_if_expr(Parser *parser, Enviroment *env, Error *error){
 			}
 			if_else = parse_if_expr(parser, env, error);
 			if(error->type != ERR_NONE) return NULL;
-			return ast_init(NODE_IF_ELSE, condition_expr, if_body, if_else);
+			return make_if_node(condition_expr, if_body, if_else);
 		}
 		else if(!is_parser_eof(parser) && parser->curr_tok_type == TOKEN_RARROW){
 			parser_next(parser, error); //consume =>
@@ -254,9 +251,9 @@ AST* parse_if_expr(Parser *parser, Enviroment *env, Error *error){
 				return NULL;
 			}
 			parser_next(parser, error); //consume }
-			return ast_init(NODE_IF_ELSE, condition_expr, if_body, if_else);
+			return make_if_node(condition_expr, if_body, if_else);
 		}
-		return ast_init(NODE_IF, NULL, condition_expr, if_body);
+		return make_if_node(condition_expr, if_body, NULL);
 	}
 	AST *expr = parse_statement(parser, env, error); // parse the expression to be evaluated
 
@@ -268,10 +265,10 @@ AST* parse_if_expr(Parser *parser, Enviroment *env, Error *error){
 		AST *else_expr = parse_statement(parser, env, error);
 		if(error->type != ERR_NONE) return NULL;
 
-		return ast_init(NODE_IF_ELSE, condition_expr, expr, else_expr);
+		return make_if_node(condition_expr, expr, else_expr);
 	}
 	if(error->type != ERR_NONE) return NULL;
-	return ast_init(NODE_IF, NULL, condition_expr, expr);
+	return make_if_node(condition_expr, expr, NULL);
 }
 
 AST* parse_function(Parser *parser, Enviroment *env, Error *error){
@@ -299,13 +296,11 @@ AST* parse_function(Parser *parser, Enviroment *env, Error *error){
 		parser_next(parser, error); // consume =>
 
 		//define the function in the enviroment before parsing its body
-		AST *function_var = ast_init(NODE_FUNC_VARIABLE, fname, NULL, NULL);
-		function_var->fname = fname;
-		env_define_func(env, fname, function_var); 
+		env_define_func(env, fname, make_var_node(fname)); 
 
 		if(!is_parser_eof(parser) && parser->curr_tok_type == TOKEN_LBRACE){
 			parser_next(parser, error); // consume {
-			parser_next(parser, error); // consume new line
+			parser_next(parser, error); // consume newline
 			AST *fn_body = parse_block(parser, env, error);
 			if(error->type != ERR_NONE) return NULL;
 			if(parser->curr_tok_type != TOKEN_RBRACE){
@@ -314,14 +309,14 @@ AST* parse_function(Parser *parser, Enviroment *env, Error *error){
 			}
 			parser_next(parser, error); // consume }
 			env_define_func(env, fname, fn_body);
-			return ast_init(NODE_FUNCTION, parameters, function_var, fn_body);
+			return make_func_node(fname, fn_body, parameters);
 		}
 
 
-		AST *fn_body = parse_statement(parser, env, error); // parse the function body (only single line functions for now)
+		AST *fn_body = parse_statement(parser, env, error);
 		if(error->type != ERR_NONE) return NULL;
 		env_define_func(env, fname, fn_body);
-		return ast_init(NODE_FUNCTION, parameters, function_var, fn_body);
+		return make_func_node(fname, fn_body, parameters);
 	}
 
 	parse_error(ERR_SYNTAX, &error, "Expected a function declaration.");
@@ -338,7 +333,7 @@ AST* parse_logic_expr(Parser *parser, Enviroment *env, Error *error){
 	while(!is_parser_eof(parser) && is_logical(parser_peek(parser, error))){
 		int type = logical_operator(parser_peek(parser, error));
 		parser_next(parser, error); //consume and | or
-		root = ast_init(type, NULL, root, parse_bool_expr(parser, env, error));
+		root = ast_init(type, root, parse_bool_expr(parser, env, error));
 		if(error->type != ERR_NONE) return NULL;
 	}
 	return root;
@@ -346,13 +341,13 @@ AST* parse_logic_expr(Parser *parser, Enviroment *env, Error *error){
 //parse boolean expressions
 AST*	parse_bool_expr(Parser *parser, Enviroment *env, Error *error){
 	if(is_parser_eof(parser)) return NULL;
-	AST *root = parse_expr(parser, env, error); //parse the left hand side expression
+	AST *left = parse_expr(parser, env, error), *right = NULL; //parse the left hand side expression
 	if(error->type != ERR_NONE) return NULL; //check for errors
 
+	int type;
 	if(is_boolean_node(parser->curr_tok_type)){
 		Token *token = parser_next(parser, error);
 		if(error->type != ERR_NONE) return NULL;
-		int type;
 		//get the specific type of the boolean expression
 		switch (token->type){
 			case TOKEN_GT: 			type = NODE_GT; break;
@@ -363,20 +358,20 @@ AST*	parse_bool_expr(Parser *parser, Enviroment *env, Error *error){
 			case TOKEN_NOT_EQUALS:	type = NODE_NOT_EQUALS; break;
 			default: return NULL;
 		}
-		root = ast_init(type, NULL, root, parse_expr(parser, env, error));
+		right = parse_expr(parser, env, error);
 		if(error->type != ERR_NONE) return NULL;
+		return make_binop_node(type, left, right);
 	}
-
-	return root;
+	return left;
 }
 
 // Parse an expression
 AST* parse_expr(Parser *parser, Enviroment* env, Error *error){
 	if(is_parser_eof(parser)) return NULL; 
-	AST *root = parse_term(parser, env, error);  // parse left hand side
+	AST *left = parse_term(parser, env, error);  // parse left hand side
 	if(error->type != ERR_NONE) return NULL;
 
-	if (is_parser_eof(parser) || root == NULL) return root;
+	if (is_parser_eof(parser) || left == NULL) return left;
 
 	while(!is_parser_eof(parser) && (parser->curr_tok_type == TOKEN_PLUS || 
 												parser->curr_tok_type == TOKEN_MINUS) && 
@@ -387,20 +382,20 @@ AST* parse_expr(Parser *parser, Enviroment* env, Error *error){
 		// consume operators + or -
 		parser_next(parser, error); 
 		//create ast node with parsed right hand side and assign to root
-		root	= ast_init(type, NULL, root, parse_term(parser, env, error));
+		left	= make_binop_node(type, left, parse_term(parser, env, error));
 		if(error->type != ERR_NONE) return NULL;
 	}
-	return root;
+	return left;
 }
 
 // Parse a term
 AST* parse_term(Parser *parser, Enviroment* env, Error *error){
 	if(is_parser_eof(parser)) return NULL; 
 
-	AST *root = parse_power(parser, env, error); // parse left hand side
+	AST *left = parse_power(parser, env, error); // parse left hand side
 	if(error->type != ERR_NONE) return NULL;
 
-	if (is_parser_eof(parser) || root == NULL) return root;
+	if (is_parser_eof(parser) || left == NULL) return left;
 
 	while(!is_parser_eof(parser) && parser->curr_tok_type != TOKEN_NEWLINE && (parser->curr_tok_type == TOKEN_MUL || 
 												parser->curr_tok_type == TOKEN_DIV || 
@@ -413,10 +408,10 @@ AST* parse_term(Parser *parser, Enviroment* env, Error *error){
 		// consume operators * or /
 		parser_next(parser, error); 
 		//create ast node with parsed right hand side and assign to root
-		root = ast_init(type, NULL, root, parse_power(parser, env, error));
+		left = make_binop_node(type, left, parse_power(parser, env, error));
 		if(error->type != ERR_NONE) return NULL;
 	}
-	return root;
+	return left;
 }
 
 AST* parse_power(Parser *parser, Enviroment* env, Error *error) {
@@ -435,7 +430,7 @@ AST* parse_power(Parser *parser, Enviroment* env, Error *error) {
 			: parse_factor(parser, env, error);
 		if (error->type != ERR_NONE) return NULL;
 
-		result = ast_init(unary_type, NULL, operand, NULL);
+		result = ast_init(unary_type, operand, NULL);
 	} else if (token->type == TOKEN_LPAREN) {
 		parser_next(parser, error); // consume (
 
@@ -456,7 +451,7 @@ AST* parse_power(Parser *parser, Enviroment* env, Error *error) {
 		AST *right = parse_factor(parser, env, error);
 		if (error->type != ERR_NONE) return NULL;
 
-		result = ast_init(NODE_POW, NULL, result, right);
+		result = make_binop_node(NODE_POW, result, right);
 	}
 
 	return result;
@@ -465,12 +460,15 @@ AST* parse_power(Parser *parser, Enviroment* env, Error *error) {
 AST*	parse_call_expr(Parser *parser, Enviroment* env, Error *error){
 	Token *token = parser_peek(parser, error);
 	if(error->type != ERR_NONE) return NULL;
-
+	
 	//if the keyword is a defined function
 	AST *variable = (AST*)env_get_function(env, token->value);
-	if(!variable) return NULL;
-	if(is_parser_eof(parser) || parser_peek(parser, error)->type == TOKEN_NEWLINE)
-			return variable;
+	if(variable == NULL){
+		printf("WHYYYYYY????\n");
+		printf("%s\n", token_to_str(token));
+		parse_error(ERR_SYNTAX, &error, "Cannot call value of undefined");
+		return NULL;
+	}
 
 	parser_next(parser, error); // consume keyword
 	Token *current = parser_peek(parser, error);
@@ -490,11 +488,7 @@ AST*	parse_call_expr(Parser *parser, Enviroment* env, Error *error){
 		}
 		parser_next(parser, error); //consume )
 
-		AST *root = ast_init(NODE_CALL, NULL, NULL, NULL);
-		root->fname = token->value;
-		root->_value.arguments = args;
-
-		return root;
+		return make_call_node(token->value, args);
 	}
 	return NULL;
 }
@@ -510,16 +504,14 @@ AST* parse_factor(Parser *parser, Enviroment* env, Error *error){
 		AST *variable = (AST*)env_get_var(env, token->value);
 		if(variable) return variable;
 
-		AST *function = parse_call_expr(parser, env, error); //try parsing a function call
-		if(error->type != ERR_NONE) return NULL;
-		if(function) return function;
-
+		//handle call expressionc case
+		if(!is_parser_eof(parser) && parser_skip(parser, 1, error)->type == TOKEN_LPAREN){
+			return parse_call_expr(parser, env, error);
+		}
 		//if the keyword is a known operator ie. add / mul / div 
-		if(builtin_operators(token) == UNKNOWN_KEYWORD){
+		else if(builtin_operators(token) == UNKNOWN_KEYWORD){
 			parser_next(parser, error);
-			AST *var =  ast_init(NODE_VARIABLE, NULL, NULL, NULL);
-			var->_value.vname = token->value;
-			return var;
+			return make_var_node(token->value);
 		}
 
 		return parse_builtin_operator(parser, env, error);
@@ -527,7 +519,7 @@ AST* parse_factor(Parser *parser, Enviroment* env, Error *error){
 	}
 	else if(token->type == TOKEN_FLOAT){ 
 		parser_next(parser, error);
-		return make_int_node(str_to_float(token->value));
+		return make_float_node(str_to_float(token->value));
 	}
 	else if(token->type == TOKEN_INT){
 		parser_next(parser, error); 
@@ -558,9 +550,7 @@ AST*	parse_builtin_operator(Parser *parser, Enviroment* env, Error *error){
 		return NULL;
 	}
 	parser_next(parser, error); // consume ')'
-	AST *root = ast_init(builtin_operators(token), NULL, NULL, NULL);
-	root->_value.arguments = arguments;
-	return root;
+	return make_operator_node(builtin_operators(token), arguments);
 }
 
 // Parse operands for function
@@ -609,7 +599,7 @@ List* parse_parameters(Parser *parser, Enviroment* env, Error *error){
 }
 
 // Determine the type of function based on keyword
-int builtin_operators(Token *token){
+NodeType builtin_operators(Token *token){
 	if(strcmp(token->value, "add") == 0) 			return NODE_FUNCTION_ADD;
 	else if(strcmp(token->value, "sub") == 0)		return NODE_FUNCTION_SUB;
 	else if(strcmp(token->value, "mul") == 0)		return NODE_FUNCTION_MUL;

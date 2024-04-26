@@ -5,17 +5,18 @@
 #include "./enviroment.h"
 #include "./ast.h"
 
+typedef enum {
+	ERR_NONE,
+	ERR_ZERO_DIV,
+	ERR_SYNTAX,
+	ERR_UNKNOWN,
+	ERR_UNKNON_VAR
+} ErrorType;
+
 typedef struct Error{
 	char *err;
 	char *message;
-
-	enum ErrorType {
-		ERR_NONE,
-		ERR_ZERO_DIV,
-		ERR_SYNTAX,
-		ERR_UNKNOWN,
-		ERR_UNKNON_VAR
-	} type;
+	ErrorType type;
 } Error;
 
 typedef struct Parser{
@@ -46,7 +47,7 @@ AST*		parse_power(Parser *parser, Enviroment* env, Error *error);
 List*		parse_arguments(Parser *parser, Enviroment* env, Error *error);
 AST*		parse_builtin_operator(Parser *parser, Enviroment* env, Error *error);
 void 		parse_error(int errorType, Error **error, char *message);
-int 		builtin_operators(Token *token);
+NodeType builtin_operators(Token *token);
 float		str_to_float(char *str);
 int		str_to_int(char *str);
 bool 		is_boolean_node(int type);

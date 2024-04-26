@@ -8,7 +8,7 @@
 
 #define BUFFER 256
 #define KEYWORD_SIZE 2
-#define SYMBOL_SIZE 50
+#define SYMBOL_SIZE 100
 
 Error error_init();
 void 	print_token(void *t);

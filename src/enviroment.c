@@ -35,11 +35,10 @@ void*	env_assign_var(Enviroment *env, char *vname, void* value){
 //get variable from the enviroment
 void*	env_get_var(Enviroment *env, char *vname){
 	if(env == NULL) return NULL;
-	void* value = ht_retrieve(env->variables, vname);
-	if(value != NULL) return value;
+
 	Enviroment *curr = env;
 	while(curr != NULL){
-		value = ht_retrieve(curr->variables, vname);
+		void *value = ht_retrieve(curr->variables, vname);
 		if(value) return value;
 		curr = curr->parent;
 	}
@@ -54,17 +53,16 @@ void*	env_define_func(Enviroment *env, char *fname, void* fbody){
 		ht_delete(&env->fn_defs, fname);
 	
 	ht_add(&env->fn_defs, fname, fbody);
-	return ht_retrieve(env->fn_defs, fbody);
+	return ht_retrieve(env->fn_defs, fname);
 }
 
 //get function from the enviroment
 void* env_get_function(Enviroment *env, char *fname){
 	if(env == NULL) return NULL;
-	void* value = ht_retrieve(env->fn_defs, fname);
-	if(value != NULL) return value;
+
 	Enviroment *curr = env;
 	while(curr != NULL){
-		value = ht_retrieve(curr->fn_defs, fname);
+		void* value = ht_retrieve(curr->fn_defs, fname);
 		if(value) return value;
 		curr = curr->parent;
 	}

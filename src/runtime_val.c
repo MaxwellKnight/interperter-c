@@ -34,7 +34,7 @@ void print_runtime_val(RuntimeVal result){
 		case RESULT_FLOAT: 			printf("float"); 	break;
 		case RESULT_NONE:				printf("null");	break;
 		case RESULT_FUNCTION:		printf("function");	break;
-		default: printf("not supported yet\n");
+		default: printf("not supported yet");
 	}
 	printf(", value: ");
 	switch(result.type){
@@ -46,7 +46,7 @@ void print_runtime_val(RuntimeVal result){
 		case RESULT_FLOAT: 			printf("%f", result.value.f_value); break;
 		case RESULT_NONE:				printf("nothing");	break;
 		case RESULT_FUNCTION:		printf("nothing");	break;
-		default: printf("not supported yet\n");
+		default: printf("not supported yet");
 	}
 	
 	printf(" }\n");
