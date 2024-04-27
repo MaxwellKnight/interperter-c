@@ -145,6 +145,7 @@ RuntimeVal eval_expr(AST *root, Enviroment* env){
 
 	} 			
 	else if(root->type == NODE_ASSIGN){
+		print_ast(root, env, 0);
 		RuntimeVal result; result.type = RESULT_NONE;
 		result = eval_expr(root->value.var.expr, env);
 		AST *value = NULL;
@@ -572,7 +573,7 @@ void print_object_node(AST *root, Enviroment *env, int level) {
 			if(curr->next) printf(", ");
 		}else {
 			printf("\n");
-			print_ast(value, env, level + 2);
+			print_ast(value, env, level + 1);
 		}
 		printf("\n");
 
@@ -581,7 +582,7 @@ void print_object_node(AST *root, Enviroment *env, int level) {
 
 	// Closing brace with proper indentation
 	print_indent(level);
-	printf("}\n");
+	printf("}");
 }
 // Recursive function to print AST
 void print_ast(AST* root, Enviroment* env, int level) {
@@ -620,7 +621,7 @@ void print_ast(AST* root, Enviroment* env, int level) {
 		printf("arguments:\n");
 		Node* curr = root->value.call_expr.arguments->head;
 		while (curr) {
-			print_ast(curr->value, env, level + 2);  // Recurse for each parameter
+			print_ast(curr->value, env, level + 1);  // Recurse for each parameter
 			curr = curr->next;
 		}
 		printf("\n");
@@ -635,7 +636,7 @@ void print_ast(AST* root, Enviroment* env, int level) {
 		return;
 	}
 
-	if(root->type == NODE_ASSIGN) print_ast(root->value.var.expr, env, level + 1);
+	if(root->type == NODE_ASSIGN) print_ast(root->value.var.expr, env, level);
 
 	if(root->type == NODE_OBJECT){
 		print_object_node(root, env, level);

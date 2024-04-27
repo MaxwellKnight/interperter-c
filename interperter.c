@@ -33,7 +33,7 @@ int main(int argc, char** argv){
 
 	RuntimeVal runtime_res = eval_expr(program, global_env);
 	// print_runtime_val(runtime_res);
-	print_ast(program, global_env, 0);
+	// print_ast(program, global_env, 0);
 
 	//free all allocated memory
 	free(source); ast_free(program);

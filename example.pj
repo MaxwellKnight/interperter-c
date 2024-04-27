@@ -19,5 +19,5 @@ obj = {
 		foo,
 		shamen
 	},
-	z: max
+	z: max,
 }

@@ -553,10 +553,6 @@ AST *parse_object(Parser *parser, Enviroment *env, Error *error) {
 
 	while (!is_parser_eof(parser) && parser->curr_tok_type != TOKEN_RBRACE) {
 		skip_newline(parser, error);
-		if (parser->curr_tok_type == TOKEN_COMMA) {
-			parser_next(parser, error); // consume comma and continue
-			continue;
-		}
 
 		Token *token = parser_next(parser, error); // consume property name
 		if (!token || (token->type != TOKEN_KEYWORD && token->type != TOKEN_RBRACE)) {
@@ -579,10 +575,14 @@ AST *parse_object(Parser *parser, Enviroment *env, Error *error) {
 			// If there's no colon, assume a shorthand property: { key }
 			ht_add(&properties, token->value, make_var_node(token->value));
 		}
+		if(!is_parser_eof(parser) && parser_peek(parser, error)->type == TOKEN_COMMA)
+			parser_next(parser, error);
+
 		skip_newline(parser, error);
 	}
 
-	if (parser->curr_tok_type != TOKEN_RBRACE) {
+
+	if (is_parser_eof(parser) || parser_peek(parser, error)->type != TOKEN_RBRACE) {
 		parse_error(ERR_SYNTAX, &error, "Expected closing brace '}' after object definition.");
 		return NULL;
 	}
