@@ -4,10 +4,15 @@
 #include "./enviroment.h"
 #include "./runtime_val.h"
 #include "../../data_structures/linked_list/linked_list.h"
+#include "../../data_structures/hash_table/hash_table.h"
+
+typedef HashTable Dictionary;
 
 typedef enum NodeType {
 	NODE_FLOAT,
 	NODE_INT,
+	NODE_BOOL,
+	NODE_OBJECT,
 	NODE_ADD,
 	NODE_SUB,
 	NODE_MUL,
@@ -23,7 +28,6 @@ typedef enum NodeType {
 	NODE_OR,
 	NODE_AND,
 	NODE_UNARY_NOT,
-	NODE_IF,
 	NODE_IF_ELSE,
 	NODE_UNARY_PLUS,
 	NODE_UNARY_MINUS,
@@ -50,7 +54,9 @@ typedef union {
 	List *arguments; // operator nodes
 
 	struct AST *condition; // if nodes
-	struct AST *return_expr; // if nodes
+	struct AST *return_expr; // 
+
+	Dictionary *properties; //for object nodes
 
 	struct AssignNodeVal {
 		char *vname;
@@ -66,6 +72,7 @@ typedef union {
 		char *fname;
 		struct AST *fbody; //represented by a root node of type block
 		List *parameters; //list of strings
+		Enviroment *env; //functions scope
 	} fn;
 
 } NodeValue;
@@ -92,11 +99,13 @@ RuntimeVal	eval_number(AST *root, Enviroment* env);
 // node creation function
 AST* 			make_int_node(int value);
 AST* 			make_float_node(int value);
+AST* 			make_bool_node(bool val);
+AST* 			make_object_node(Dictionary *properties);
 AST* 			make_block_node(List* statements);
 AST*			make_assign_node(char *vname, AST *expr);
 AST*			make_binop_node(NodeType type, AST *left, AST *right);
 AST*			make_if_node(AST *condition, AST *if_case, AST *else_case);
-AST*			make_func_node(char *fname, AST *fbody, List *parameters);
+AST*			make_func_node(char *fname, AST *fbody, List *parameters, Enviroment *env);
 AST*			make_var_node(char *vname);
 AST*			make_call_node(char *caller, List *arguments);
 AST*			make_return_node(AST *expr);
@@ -118,5 +127,9 @@ void 			print_ast(AST* root, Enviroment* env, int level);
 void 			print_builtin_math_function(AST* root, Enviroment* env, int level);
 RuntimeVal 	coerce_to_int(RuntimeVal result);
 RuntimeVal 	coerce_to_float(RuntimeVal result);
+
+void ast_free(AST *root);
+void free_ast_list(List *nodes);
+bool is_builtin_operator(AST *root);
 
 #endif

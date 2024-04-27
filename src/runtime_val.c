@@ -53,7 +53,8 @@ void print_runtime_val(RuntimeVal result){
 }
 
 bool is_error(RuntimeVal val){
-	return 	val.type == RESULT_ERROR 				||
+	return 	val.type == RESULT_NONE 				||
+			 	val.type == RESULT_ERROR 				||
 				val.type == RESULT_ERROR_SYNTAX		||
 				val.type == RESULT_ERROR_UNDEFINED	||
 				val.type == RESULT_ERROR_VALUE		||

@@ -15,8 +15,8 @@ Enviroment* env_init(int env_size){
 //create the global env with builtin variables and functions
 Enviroment*	create_global_env(int env_size){
 	Enviroment *env = env_init(env_size);
-	env_assign_var(env, "true", make_int_node(1));
-	env_assign_var(env, "false", make_int_node(0));
+	env_assign_var(env, "true", make_bool_node(true));
+	env_assign_var(env, "false", make_bool_node(false));
 	env_assign_var(env, "null", make_int_node(0));
 	return env;
 }

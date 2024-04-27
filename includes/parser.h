@@ -31,7 +31,7 @@ int		is_parser_eof(Parser *parser);
 Token*	parser_next(Parser *parser, Error *error);
 Token*	parser_peek(Parser *parser, Error *error);
 Token*	parser_skip(Parser *parser, int jmp_count, Error *error);
-AST*		parse_block(Parser *parser, Enviroment* env, bool is_func_statementm, Error *error);
+AST*		parse_block(Parser *parser, Enviroment* env, bool is_func_statement, Error *error);
 AST*		parse_function(Parser *parser, Enviroment* env, Error *error);
 AST*		parse_call_expr(Parser *parser, Enviroment* env, Error *error);
 List*		parse_parameters(Parser *parser, Enviroment* env, Error *error);
@@ -43,11 +43,14 @@ AST*		parse_statement(Parser *parser, Enviroment* env, bool is_func_statement, E
 AST*		parse_expr(Parser *parser, Enviroment* env, Error *error);
 AST*		parse_term(Parser *parser, Enviroment* env, Error *error);
 AST*		parse_factor(Parser *parser, Enviroment* env, Error *error);
+AST 		*parse_object(Parser *parser, Enviroment *env, Error *error);
 AST*		parse_power(Parser *parser, Enviroment* env, Error *error);
 List*		parse_arguments(Parser *parser, Enviroment* env, Error *error);
 AST*		parse_builtin_operator(Parser *parser, Enviroment* env, Error *error);
 void 		parse_error(int errorType, Error **error, char *message);
 NodeType builtin_operators(Token *token);
+
+void 		skip_newline(Parser *parser, Error *error);
 float		str_to_float(char *str);
 int		str_to_int(char *str);
 bool 		is_boolean_node(int type);

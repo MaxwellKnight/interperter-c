@@ -67,7 +67,9 @@ operator 			:= (add | sub | mul | div) LPAREN ( expr (COMMA expr)* ) RPAREN
 						| func_call
 						| 	number
 
-number				:= FLOAT | INT
+number				:= object | FLOAT | INT | 
+object				:= RBRACE object_expr (COMMA object_expr)* LBRACE
+object_expr			:= KEYWORD | KEYWORD COLON object | expr
 
 */
 
@@ -117,7 +119,7 @@ Token* parser_skip(Parser *parser, int jmp_count, Error *error){
 		i++;
 		curr = curr->next;
 	}
-	return curr->value;
+	return curr ? curr->value : NULL;
 }
 
 // Check if the parser has reached end of tokens
@@ -202,6 +204,10 @@ AST* parse_assignment_expr(Parser *parser, Enviroment *env, Error *error){
 	if(expr == NULL){
 		parse_error(ERR_SYNTAX, &error, "Expected expression after assignment.");
 		return NULL;
+	}
+	else if(expr->type == NODE_BLOCK){
+		env_define_func(env, vname, expr);
+		return env_get_function(env, vname);
 	}
 	//return an assign node with left child of variable node and right child of expr node
 	return make_assign_node(vname, expr);
@@ -301,11 +307,12 @@ AST* parse_function(Parser *parser, Enviroment *env, Error *error){
 
 		//define the function in the enviroment before parsing its body
 		env_define_func(env, fname, make_var_node(fname)); 
-
+		Enviroment *scope = env_init(DEFAULT_SIZE);
+		scope->parent = env;
 		if(!is_parser_eof(parser) && parser->curr_tok_type == TOKEN_LBRACE){
 			parser_next(parser, error); // consume {
 			parser_next(parser, error); // consume newline
-			AST *fn_body = parse_block(parser, env, true, error);
+			AST *fn_body = parse_block(parser, scope, true, error);
 			if(error->type != ERR_NONE) return NULL;
 			if(parser->curr_tok_type != TOKEN_RBRACE){
 				parse_error(ERR_SYNTAX, &error, "Expected } after function declation");
@@ -313,14 +320,14 @@ AST* parse_function(Parser *parser, Enviroment *env, Error *error){
 			}
 			parser_next(parser, error); // consume }
 			env_define_func(env, fname, fn_body);
-			return make_func_node(fname, fn_body, parameters);
+			return make_func_node(fname, fn_body, parameters, scope);
 		}
 
 
 		AST *fn_body = parse_statement(parser, env, true, error);
 		if(error->type != ERR_NONE) return NULL;
 		env_define_func(env, fname, fn_body);
-		return make_func_node(fname, fn_body, parameters);
+		return make_func_node(fname, fn_body, parameters, scope);
 	}
 
 	parse_error(ERR_SYNTAX, &error, "Expected a function declaration.");
@@ -466,17 +473,14 @@ AST*	parse_call_expr(Parser *parser, Enviroment* env, Error *error){
 	if(error->type != ERR_NONE) return NULL;
 	
 	//if the keyword is a defined function
-	AST *variable = (AST*)env_get_function(env, token->value);
-	if(variable == NULL){
-		printf("WHYYYYYY????\n");
-		printf("%s\n", token_to_str(token));
-		parse_error(ERR_SYNTAX, &error, "Cannot call value of undefined");
-		return NULL;
-	}
+	AST *function = (AST*)env_get_function(env, token->value);
+	if(!function) return NULL;
 
 	parser_next(parser, error); // consume keyword
+	if(is_parser_eof(parser)) return function;
+
 	Token *current = parser_peek(parser, error);
-	if(current->type != TOKEN_LPAREN){
+	if(!current || current->type != TOKEN_LPAREN){
 		parse_error(ERR_SYNTAX, &error, "Expected `(` after function name: ");
 		return NULL;
 	}
@@ -509,8 +513,10 @@ AST* parse_factor(Parser *parser, Enviroment* env, Error *error){
 		if(variable) return variable;
 
 		//handle call expressionc case
-		if(!is_parser_eof(parser) && parser_skip(parser, 1, error)->type == TOKEN_LPAREN){
-			return parse_call_expr(parser, env, error);
+		Token *skip_token = parser_skip(parser, 1, error);
+		if(!skip_token || skip_token->type == TOKEN_LPAREN){
+			AST *call_expr = parse_call_expr(parser, env, error);
+			if(call_expr) return call_expr;
 		}
 		//if the keyword is a known operator ie. add / mul / div 
 		else if(builtin_operators(token) == UNKNOWN_KEYWORD){
@@ -529,13 +535,78 @@ AST* parse_factor(Parser *parser, Enviroment* env, Error *error){
 		parser_next(parser, error); 
 		return make_int_node(str_to_int(token->value));
 	}
+	else if(token->type == TOKEN_LBRACE){
+		return parse_object(parser, env, error);
+	}
 
 	return NULL; // Return NULL if token is not recognized
 }
 
+AST *parse_object(Parser *parser, Enviroment *env, Error *error) {
+	if (is_parser_eof(parser)) {
+		parse_error(ERR_SYNTAX, &error, "Unexpected end of file while parsing object.");
+		return NULL;
+	}
+
+	parser_next(parser, error); // consume the opening brace '{'
+	Dictionary *properties = create_htable(DEFAULT_SIZE);
+
+	while (!is_parser_eof(parser) && parser->curr_tok_type != TOKEN_RBRACE) {
+		skip_newline(parser, error);
+		if (parser->curr_tok_type == TOKEN_COMMA) {
+			parser_next(parser, error); // consume comma and continue
+			continue;
+		}
+
+		Token *token = parser_next(parser, error); // consume property name
+		if (!token || (token->type != TOKEN_KEYWORD && token->type != TOKEN_RBRACE)) {
+			parse_error(ERR_SYNTAX, &error, "Expected a keyword for property name inside object.");
+			return NULL;
+		}
+
+		skip_newline(parser, error);
+
+		if (parser->curr_tok_type == TOKEN_COLON) {
+			parser_next(parser, error); // consume colon
+			if (is_parser_eof(parser)) {
+					parse_error(ERR_SYNTAX, &error, "Expected expression after ':' in object definition.");
+					return NULL;
+			}
+			AST *expr = parse_expr(parser, env, error);
+			if (error && error->type != ERR_NONE) return NULL;
+			ht_add(&properties, token->value, expr);
+		} else {
+			// If there's no colon, assume a shorthand property: { key }
+			ht_add(&properties, token->value, make_var_node(token->value));
+		}
+		skip_newline(parser, error);
+	}
+
+	if (parser->curr_tok_type != TOKEN_RBRACE) {
+		parse_error(ERR_SYNTAX, &error, "Expected closing brace '}' after object definition.");
+		return NULL;
+	}
+
+	parser_next(parser, error); // consume the closing brace '}'
+
+	return make_object_node(properties);
+}
+
+void skip_newline(Parser *parser, Error *error) {
+    while (!is_parser_eof(parser) && parser->curr_tok_type == TOKEN_NEWLINE) {
+        parser_next(parser, error);
+    }
+}
+
+
 AST*	parse_builtin_operator(Parser *parser, Enviroment* env, Error *error){
 	Token *token = parser_next(parser, error); 
-	if(is_parser_eof(parser)){
+
+	if(builtin_operators(token) == UNKNOWN_KEYWORD){
+		parse_error(ERR_SYNTAX, &error, "Undefined identifier.");
+		return NULL;
+	}
+	else if(is_parser_eof(parser)){
 		parse_error(ERR_SYNTAX, &error, "Expected operator name");
 		return NULL;
 	}
@@ -565,7 +636,7 @@ List* parse_arguments(Parser* parser, Enviroment* env, Error *error){
 
 		if(error->type != ERR_NONE) return NULL;
 		if(is_parser_eof(parser)){
-			parse_error(ERR_SYNTAX, &error, "Unexpected end of tokens.");
+			parse_error(ERR_SYNTAX, &error, "Expected `)` after argument list.");
 			return NULL;
 		}
 		if(parser->curr_tok_type == TOKEN_RPAREN || parser->curr_tok_type == TOKEN_RARROW) break;

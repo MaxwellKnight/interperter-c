@@ -11,4 +11,13 @@ fn fib_sqaure_sum: x, y => {
 	return square(fib(x)) + square(fib(y))
 }
 
-fib_sqaure_sum(5,3)
+obj = {
+	x: 1,
+	y: 2,
+	complex: {
+		a: 0,
+		foo,
+		shamen
+	},
+	z: max
+}

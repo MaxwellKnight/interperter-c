@@ -1,3 +1,4 @@
 src/*.o
 includes/*.o
 _run
+Makefile

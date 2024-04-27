@@ -12,15 +12,14 @@
 
 Error error_init();
 void 	print_token(void *t);
-void 	run(Enviroment *global_env);
+int 	run(Enviroment *global_env);
 char* read_contents(char *filepath);
+
 
 int main(int argc, char** argv){
 	Enviroment *global_env = create_global_env(SYMBOL_SIZE);
-	if(argc < 2){
-		run(global_env);
-		return 0;
-	}
+	if(argc < 2) return run(global_env);
+
 	char *source = read_contents(argv[1]);
 	Parser *parser = parser_init(tokenize(source));
 	Error error = error_init();
@@ -33,17 +32,18 @@ int main(int argc, char** argv){
 	}
 
 	RuntimeVal runtime_res = eval_expr(program, global_env);
-	print_runtime_val(runtime_res);
+	// print_runtime_val(runtime_res);
 	print_ast(program, global_env, 0);
 
-	free_list(parser->tokens, token_free);
-	free(source);
+	//free all allocated memory
+	free(source); ast_free(program);
+	free_list(parser->tokens, token_free); free(parser);
 	return 0;
 }
 
 
 //runtime REPL
-void run(Enviroment *global_env){
+int run(Enviroment *global_env){
 	char input[BUFFER] = {0};
 	while(true){
 		printf(">>> ");
@@ -58,7 +58,11 @@ void run(Enviroment *global_env){
 
 		RuntimeVal runtime_res = eval_expr(program, global_env);
 		print_runtime_val(runtime_res);
+		
+		//free allocated memory
+		//TODO
 	}
+	return 0;
 }
 
 //helper function to print tokens
